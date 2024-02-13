@@ -1,0 +1,6 @@
+/target
+.vscode/
+.cargo/
+
+.secret
+.env
