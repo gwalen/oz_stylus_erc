@@ -8,6 +8,7 @@ use stylus_sdk::{
 };
 
 use super::erc20::{self, Erc20, Erc20Params, Erc20Error};
+// TODO: remove unused imports
 
 struct MyTokenParams;
 
@@ -29,7 +30,7 @@ sol_storage! {
 #[inherit(Erc20<MyTokenParams>)]
 impl MyToken {
 
-    /// for testing purposes, anyone can mint
+    // for testing purposes, anyone can mint
     pub fn mint(&mut self, to: Address, amount: U256) -> Result<(), Erc20Error> {
         self.erc20.mint(to, amount)
     }
