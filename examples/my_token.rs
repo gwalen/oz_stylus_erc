@@ -17,10 +17,6 @@ const ALICE_PRIV_KEY_PATH: &str = "ALICE_PRIV_KEY_PATH";
 /// deployer private key file path.
 const BOB_PRIV_KEY_PATH: &str = "BOB_PRIV_KEY_PATH";
 
-
-/// second burner wallet
-// const SECOND_BURNER_WALLET: &str = "SECOND_BURNER_WALLET";
-
 /// Stylus RPC endpoint url.
 const RPC_URL: &str = "RPC_URL";
 
@@ -54,8 +50,8 @@ async fn main() -> eyre::Result<()> {
     let alice_key_path = std::env::var(ALICE_PRIV_KEY_PATH)
         .map_err(|_| eyre!("No {} env var set", ALICE_PRIV_KEY_PATH))?;
     let rpc_url = std::env::var(RPC_URL).map_err(|_| eyre!("No {} env var set", RPC_URL))?;
-    let bob_key_path =
-        std::env::var(BOB_PRIV_KEY_PATH).map_err(|_| eyre!("No {} env var set", BOB_PRIV_KEY_PATH))?;
+    let bob_key_path = std::env::var(BOB_PRIV_KEY_PATH)
+        .map_err(|_| eyre!("No {} env var set", BOB_PRIV_KEY_PATH))?;
 
     let provider = Provider::<Http>::try_from(rpc_url)?;
     let my_token_address: Address = program_address.parse()?;
@@ -64,38 +60,57 @@ async fn main() -> eyre::Result<()> {
     let alice_wallet = LocalWallet::from_str(&alice_private_key)?;
     let chain_id = provider.get_chainid().await?.as_u64();
     let alice_client = Arc::new(SignerMiddleware::new(
-        provider,
+        provider.clone(),
         alice_wallet.clone().with_chain_id(chain_id),
     ));
 
     let bob_private_key = read_secret_from_file(&bob_key_path)?;
     let bob_wallet = LocalWallet::from_str(&bob_private_key)?;
-    let bob_address: Address = bob_wallet.address();
+    let bob_client = Arc::new(SignerMiddleware::new(
+        provider.clone(),
+        bob_wallet.clone().with_chain_id(chain_id),
+    ));
 
-    let alice_my_token = MyToken::new(my_token_address, alice_client);
+    let my_token_alice_signer = MyToken::new(my_token_address, alice_client);
+    let my_token_bob_signer = MyToken::new(my_token_address, bob_client);
 
     /****  call MyToken contracts methods ****/
 
-    let token_name: String = alice_my_token.name().call().await?;
+    let token_name: String = my_token_alice_signer.name().call().await?;
     println!("token name: {}", token_name);
 
     // Alice is the deployer
-    mint(&alice_my_token, alice_wallet.address()).await?;
+    mint(&my_token_alice_signer, alice_wallet.address()).await?;
 
     transfer(
-        &alice_my_token,
+        &my_token_alice_signer,
         alice_wallet.address(),
-        bob_address,
+        bob_wallet.address(),
         100.into(),
-    ).await?;
+    )
+    .await?;
+
+    approve(
+        &my_token_bob_signer,
+        bob_wallet.address(),
+        alice_wallet.address(),
+        100.into(),
+    )
+    .await?; // approve for bob's funds for alice
+
+    transfer_from(
+        &my_token_alice_signer,
+        bob_wallet.address(),
+        alice_wallet.address(),
+        100.into(),
+    )
+    .await?; // alice is calling to make a transfer from bob to herself based on allowance
 
     Ok(())
 }
 
-async fn mint(
-    my_token: &MyTokenType,
-    to: Address,
-) -> eyre::Result<()> {
+async fn mint(my_token: &MyTokenType, to: Address) -> eyre::Result<()> {
+    println!("--- Mint");
     let deployer_balance: U256 = my_token.balance_of(to).call().await?;
     println!("mint 'to' balance before : {}", deployer_balance);
 
@@ -108,7 +123,7 @@ async fn mint(
     println!("mint tx: {:?}", mint_tx.transaction_hash);
 
     let deployer_balance: U256 = my_token.balance_of(to).call().await?;
-    println!("mint 'to' balance after mint : {}", deployer_balance);
+    println!("mint 'to' balance after : {}", deployer_balance);
 
     Ok(())
 }
@@ -119,6 +134,7 @@ async fn transfer(
     to: Address,
     amount: U256,
 ) -> eyre::Result<()> {
+    println!("--- Transfer");
     let from_balance_before: U256 = my_token.balance_of(from).call().await?;
     println!("from balance before : {}", from_balance_before);
     let to_balance_before: U256 = my_token.balance_of(to).call().await?;
@@ -133,51 +149,64 @@ async fn transfer(
     println!("transfer tx: {:?}", tx.transaction_hash);
 
     let from_balance_after = my_token.balance_of(from).call().await?;
-    println!("from balance after mint : {}", from_balance_after);
+    println!("from balance after : {}", from_balance_after);
     let to_balance_after = my_token.balance_of(to).call().await?;
-    println!("to balance after mint : {}", to_balance_after);
+    println!("to balance after : {}", to_balance_after);
 
     Ok(())
 }
 
-// async fn approve_and_transfer_from(
-//     my_token: &MyTokenType,
-//     from: Address,
-//     to: Address,
-//     amount: U256,
-// ) -> eyre::Result<()> {
-//     let from_balance_before: U256 = my_token.balance_of(from).call().await?;
-//     println!("from balance before : {}", from_balance_before);
-//     let to_balance_before: U256 = my_token.balance_of(to).call().await?;
-//     println!("to balance before : {}", to_balance_before);
+async fn approve(
+    my_token_owner_signer: &MyTokenType,
+    owner: Address,
+    spender: Address,
+    amount: U256,
+) -> eyre::Result<()> {
+    println!("--- Approve");
+    let mut approved_amount: U256 = my_token_owner_signer.allowance(owner, spender).call().await?;
+    println!("approved amount before : {}", approved_amount);
 
-//     let approve_tx: TransactionReceipt = my_token
-//         .approve(from, amount)
-//         .send()
-//         .await?
-//         .await?
-//         .expect("approve tx returned non");
-//     println!("approve tx: {:?}", approve_tx.transaction_hash);
-//     let approved_amount = my_token.allowance(from, to).call().await?;
-//     println!("approved amount : {}", approved_amount);
+    let approve_tx: TransactionReceipt = my_token_owner_signer
+        .approve(spender, amount)
+        .send()
+        .await?
+        .await?
+        .expect("approve tx returned non");
+    println!("approve tx: {:?}", approve_tx.transaction_hash);
 
-//     let tx: TransactionReceipt = my_token
-//         .transfer_from(from, to, amount)
-//         .send()
-//         .await?
-//         .await?
-//         .expect("transfer from tx returned non");
-//     println!("transfer from tx: {:?}", tx.transaction_hash);
+    approved_amount = my_token_owner_signer.allowance(owner, spender).call().await?;
+    println!("approved amount after : {}", approved_amount);
 
-//     let from_balance_after = my_token.balance_of(from).call().await?;
-//     println!("from balance after mint : {}", from_balance_after);
-//     let to_balance_after = my_token.balance_of(to).call().await?;
-//     println!("to balance after mint : {}", to_balance_after);
+    Ok(())
+}
 
-//     Ok(())
-// }
+async fn transfer_from(
+    my_token: &MyTokenType,
+    from: Address,
+    to: Address,
+    amount: U256,
+) -> eyre::Result<()> {
+    println!("--- Transfer from");
+    let from_balance_before: U256 = my_token.balance_of(from).call().await?;
+    println!("from balance before : {}", from_balance_before);
+    let to_balance_before: U256 = my_token.balance_of(to).call().await?;
+    println!("to balance before : {}", to_balance_before);
 
+    let tx: TransactionReceipt = my_token
+        .transfer_from(from, to, amount)
+        .send()
+        .await?
+        .await?
+        .expect("transfer from tx returned non");
+    println!("transfer from tx: {:?}", tx.transaction_hash);
 
+    let from_balance_after = my_token.balance_of(from).call().await?;
+    println!("from balance after : {}", from_balance_after);
+    let to_balance_after = my_token.balance_of(to).call().await?;
+    println!("to balance after : {}", to_balance_after);
+
+    Ok(())
+}
 
 fn read_secret_from_file(fpath: &str) -> eyre::Result<String> {
     let f = std::fs::File::open(fpath)?;
