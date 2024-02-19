@@ -18,7 +18,7 @@ use std::sync::Arc;
 use dotenv::dotenv;
 
 /// Your private key file path.
-const DEPLOYER_PRIV_KEY_PATH: &str = "DEPLOYER_PRIV_KEY_PATH";
+const ALICE_PRIV_KEY_PATH: &str = "ALICE_PRIV_KEY_PATH";
 
 /// Stylus RPC endpoint url.
 const RPC_URL: &str = "RPC_URL";
@@ -32,8 +32,8 @@ async fn main() -> eyre::Result<()> {
 
     let program_address = std::env::var(STYLUS_PROGRAM_ADDRESS)
         .map_err(|_| eyre!("No {} env var set", STYLUS_PROGRAM_ADDRESS))?;
-    let priv_key_path = std::env::var(DEPLOYER_PRIV_KEY_PATH)
-        .map_err(|_| eyre!("No {} env var set", DEPLOYER_PRIV_KEY_PATH))?;
+    let priv_key_path = std::env::var(ALICE_PRIV_KEY_PATH)
+        .map_err(|_| eyre!("No {} env var set", ALICE_PRIV_KEY_PATH))?;
     let rpc_url =
         std::env::var(RPC_URL).map_err(|_| eyre!("No {} env var set", RPC_URL))?;
     
