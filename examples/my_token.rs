@@ -11,8 +11,11 @@ use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 use std::sync::Arc;
 
-/// Your private key file path.
-const PRIV_KEY_PATH: &str = "PRIV_KEY_PATH";
+/// deployer private key file path.
+const DEPLOYER_PRIV_KEY_PATH: &str = "DEPLOYER_PRIV_KEY_PATH";
+
+/// second burner wallet
+const SECOND_BURNER_WALLET: &str = "SECOND_BURNER_WALLET";
 
 /// Stylus RPC endpoint url.
 const RPC_URL: &str = "RPC_URL";
@@ -42,12 +45,15 @@ async fn main() -> eyre::Result<()> {
 
     let program_address = std::env::var(STYLUS_PROGRAM_ADDRESS)
         .map_err(|_| eyre!("No {} env var set", STYLUS_PROGRAM_ADDRESS))?;
-    let priv_key_path =
-        std::env::var(PRIV_KEY_PATH).map_err(|_| eyre!("No {} env var set", PRIV_KEY_PATH))?;
+    let priv_key_path = std::env::var(DEPLOYER_PRIV_KEY_PATH)
+        .map_err(|_| eyre!("No {} env var set", DEPLOYER_PRIV_KEY_PATH))?;
     let rpc_url = std::env::var(RPC_URL).map_err(|_| eyre!("No {} env var set", RPC_URL))?;
+    let second_burner_wallet =
+        std::env::var(SECOND_BURNER_WALLET).map_err(|_| eyre!("No {} env var set", SECOND_BURNER_WALLET))?;
 
     let provider = Provider::<Http>::try_from(rpc_url)?;
-    let address: Address = program_address.parse()?;
+    let my_token_address: Address = program_address.parse()?;
+    let burner_wallet_2: Address = second_burner_wallet.parse()?;
 
     let private_key = read_secret_from_file(&priv_key_path)?;
     let wallet = LocalWallet::from_str(&private_key)?;
@@ -57,21 +63,28 @@ async fn main() -> eyre::Result<()> {
         wallet.clone().with_chain_id(chain_id),
     ));
 
-    let my_token = MyToken::new(address, client);
+    let my_token = MyToken::new(my_token_address, client);
 
     // call MyToken contracts methods
 
     let token_name: String = my_token.name().call().await?;
     println!("token name: {}", token_name);
 
-    mint_tokens(my_token, wallet).await?;
+    mint(my_token.clone(), wallet.clone()).await?; // TODO: borrow
+
+    transfer(
+        my_token.clone(),
+        wallet.address(),
+        burner_wallet_2,
+        100.into(),
+    ).await?;
 
     Ok(())
 }
 
-async fn mint_tokens(
+async fn mint(
     my_token: MyToken<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    wallet: LocalWallet,
+    wallet: LocalWallet, // TODO: use Address
 ) -> eyre::Result<()> {
     let deployer_balance: U256 = my_token.balance_of(wallet.address()).call().await?;
     println!("deployer balance before : {}", deployer_balance);
@@ -86,6 +99,29 @@ async fn mint_tokens(
 
     let deployer_balance: U256 = my_token.balance_of(wallet.address()).call().await?;
     println!("deployer balance after mint : {}", deployer_balance);
+
+    Ok(())
+}
+
+async fn transfer(
+    my_token: MyToken<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    from: Address,
+    to: Address,
+    amount: U256,
+) -> eyre::Result<()> {
+    let from_balance_before: U256 = my_token.balance_of(from).call().await?;
+    println!("deployer balance before : {}", from_balance_before);
+
+    let tx: TransactionReceipt = my_token
+        .transfer(to, amount)
+        .send()
+        .await?
+        .await?
+        .expect("transfer tx returned non");
+    println!("transfer tx: {:?}", tx.transaction_hash);
+
+    let from_balance_after = my_token.balance_of(from).call().await?;
+    println!("deployer balance after mint : {}", from_balance_after);
 
     Ok(())
 }
