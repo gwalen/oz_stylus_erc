@@ -40,39 +40,22 @@ abigen!(
 );
 
 type MyTokenType = MyToken<SignerMiddleware<Provider<Http>, LocalWallet>>;
+type SignerClient = Arc<SignerMiddleware<Provider<Http>, LocalWallet>>;
+struct Fixtures {
+    alice_wallet: LocalWallet,
+    bob_wallet: LocalWallet,
+    alice_client: SignerClient,
+    bob_client: SignerClient,
+    erc20_token_address: Address,
+}
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    dotenv().ok();
 
-    let program_address = std::env::var(MY_TOKEN_PROGRAM_ADDRESS)
-        .map_err(|_| eyre!("No {} env var set", MY_TOKEN_PROGRAM_ADDRESS))?;
-    let alice_key_path = std::env::var(ALICE_PRIV_KEY_PATH)
-        .map_err(|_| eyre!("No {} env var set", ALICE_PRIV_KEY_PATH))?;
-    let rpc_url = std::env::var(RPC_URL).map_err(|_| eyre!("No {} env var set", RPC_URL))?;
-    let bob_key_path = std::env::var(BOB_PRIV_KEY_PATH)
-        .map_err(|_| eyre!("No {} env var set", BOB_PRIV_KEY_PATH))?;
+    let fixtures = init_fixtures().await?;
 
-    let provider = Provider::<Http>::try_from(rpc_url)?;
-    let my_token_address: Address = program_address.parse()?;
-
-    let alice_private_key = read_secret_from_file(&alice_key_path)?;
-    let alice_wallet = LocalWallet::from_str(&alice_private_key)?;
-    let chain_id = provider.get_chainid().await?.as_u64();
-    let alice_client = Arc::new(SignerMiddleware::new(
-        provider.clone(),
-        alice_wallet.clone().with_chain_id(chain_id),
-    ));
-
-    let bob_private_key = read_secret_from_file(&bob_key_path)?;
-    let bob_wallet = LocalWallet::from_str(&bob_private_key)?;
-    let bob_client = Arc::new(SignerMiddleware::new(
-        provider.clone(),
-        bob_wallet.clone().with_chain_id(chain_id),
-    ));
-
-    let my_token_alice_signer = MyToken::new(my_token_address, alice_client);
-    let my_token_bob_signer = MyToken::new(my_token_address, bob_client);
+    let my_token_alice_signer = MyToken::new(fixtures.erc20_token_address, fixtures.alice_client);
+    let my_token_bob_signer = MyToken::new(fixtures.erc20_token_address, fixtures.bob_client);
 
     /****  call MyToken contracts methods ****/
 
@@ -80,28 +63,28 @@ async fn main() -> eyre::Result<()> {
     println!("token name: {}", token_name);
 
     // Alice is the deployer
-    mint(&my_token_alice_signer, alice_wallet.address()).await?;
+    mint(&my_token_alice_signer, fixtures.alice_wallet.address()).await?;
 
     transfer(
         &my_token_alice_signer,
-        alice_wallet.address(),
-        bob_wallet.address(),
+        fixtures.alice_wallet.address(),
+        fixtures.bob_wallet.address(),
         100.into(),
     )
     .await?;
 
     approve(
         &my_token_bob_signer,
-        bob_wallet.address(),
-        alice_wallet.address(),
+        fixtures.bob_wallet.address(),
+        fixtures.alice_wallet.address(),
         100.into(),
     )
     .await?; // approve for bob's funds for alice
 
     transfer_from(
         &my_token_alice_signer,
-        bob_wallet.address(),
-        alice_wallet.address(),
+        fixtures.bob_wallet.address(),
+        fixtures.alice_wallet.address(),
         100.into(),
     )
     .await?; // alice is calling to make a transfer from bob to herself based on allowance
@@ -206,6 +189,44 @@ async fn transfer_from(
     println!("to balance after : {}", to_balance_after);
 
     Ok(())
+}
+
+async fn init_fixtures() -> eyre::Result<Fixtures>  {
+    dotenv().ok();
+
+    let program_address = std::env::var(MY_TOKEN_PROGRAM_ADDRESS)
+        .map_err(|_| eyre!("No {} env var set", MY_TOKEN_PROGRAM_ADDRESS))?;
+    let alice_key_path = std::env::var(ALICE_PRIV_KEY_PATH)
+        .map_err(|_| eyre!("No {} env var set", ALICE_PRIV_KEY_PATH))?;
+    let rpc_url = std::env::var(RPC_URL).map_err(|_| eyre!("No {} env var set", RPC_URL))?;
+    let bob_key_path = std::env::var(BOB_PRIV_KEY_PATH)
+        .map_err(|_| eyre!("No {} env var set", BOB_PRIV_KEY_PATH))?;
+
+    let provider = Provider::<Http>::try_from(rpc_url)?;
+    let my_token_address: Address = program_address.parse()?;
+
+    let alice_private_key = read_secret_from_file(&alice_key_path)?;
+    let alice_wallet = LocalWallet::from_str(&alice_private_key)?;
+    let chain_id = provider.get_chainid().await?.as_u64();
+    let alice_client = Arc::new(SignerMiddleware::new(
+        provider.clone(),
+        alice_wallet.clone().with_chain_id(chain_id),
+    ));
+
+    let bob_private_key = read_secret_from_file(&bob_key_path)?;
+    let bob_wallet = LocalWallet::from_str(&bob_private_key)?;
+    let bob_client = Arc::new(SignerMiddleware::new(
+        provider.clone(),
+        bob_wallet.clone().with_chain_id(chain_id),
+    ));
+
+    Ok(Fixtures {
+        alice_wallet,
+        bob_wallet,
+        alice_client,
+        bob_client,
+        erc20_token_address: my_token_address,
+    })
 }
 
 fn read_secret_from_file(fpath: &str) -> eyre::Result<String> {

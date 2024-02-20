@@ -39,3 +39,6 @@ strip = true
 lto = true
 panic = "abort"
 opt-level = "s"
+
+[build]
+target = "aarch64-apple-darwin"
