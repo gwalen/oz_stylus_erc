@@ -6,9 +6,8 @@ use ethers::{
     signers::{LocalWallet, Signer},
     types::{Address, TransactionReceipt, U256},
 };
-use eyre::eyre;
+use eyre::{eyre, Report};
 use oz_stylus_erc::tokens::erc20::Erc20Params;
-use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -47,7 +46,6 @@ abigen!(
 );
 
 type MyTokenType = MyToken<SignerMiddleware<Provider<Http>, LocalWallet>>;
-type SignerClient = Arc<SignerMiddleware<Provider<Http>, LocalWallet>>;
 
 struct Fixtures {
     alice_wallet: LocalWallet,
@@ -70,7 +68,6 @@ pub mod erc20_error_selector {
 
 static FIXTURES: OnceCell<Mutex<Fixtures>> = OnceCell::const_new();
 
-
 #[tokio::test]
 async fn erc20_params() {
     let fixtures_mutex = init_fixtures().await.unwrap();
@@ -81,7 +78,6 @@ async fn erc20_params() {
     let token_name = token_signer_alice.name().call().await.unwrap();
     let token_symbol = token_signer_alice.symbol().call().await.unwrap();
     let token_decimals = token_signer_alice.decimals().call().await.unwrap();
-
 
     assert_eq!(token_name, MyTokenParams::NAME);
     assert_eq!(token_symbol, MyTokenParams::SYMBOL);
@@ -98,7 +94,9 @@ async fn mint_test() {
     let amount: U256 = 1000.into();
 
     let alice_balance_before = balance_of(token_signer_alice, alice_address).await.unwrap();
-    mint(token_signer_alice, alice_address, amount).await.unwrap();
+    mint(token_signer_alice, alice_address, amount)
+        .await
+        .unwrap();
     let alice_balance_after = balance_of(token_signer_alice, alice_address).await.unwrap();
 
     assert_eq!(alice_balance_after - alice_balance_before, amount);
@@ -114,15 +112,18 @@ async fn burn_test() {
     let amount: U256 = 1000.into();
 
     // first get some tokens
-    mint(token_signer_alice, alice_address, amount).await.unwrap();
+    mint(token_signer_alice, alice_address, amount)
+        .await
+        .unwrap();
     let alice_balance_before = balance_of(token_signer_alice, alice_address).await.unwrap();
     // burn and check the difference
-    burn(token_signer_alice, alice_address, amount).await.unwrap();
+    burn(token_signer_alice, alice_address, amount)
+        .await
+        .unwrap();
     let alice_balance_after = balance_of(token_signer_alice, alice_address).await.unwrap();
 
     assert_eq!(alice_balance_before - alice_balance_after, amount);
 }
-
 
 #[tokio::test]
 async fn transfer_test() {
@@ -173,9 +174,14 @@ async fn transfer_from_test() {
     let bob_balance_before = balance_of(token_signer_alice, bob_address).await.unwrap();
 
     // transfer from bob to alice but alice is the signer of tx
-    transfer_from(token_signer_alice, bob_address, alice_address, amount_transfer)
-        .await
-        .unwrap();
+    transfer_from(
+        token_signer_alice,
+        bob_address,
+        alice_address,
+        amount_transfer,
+    )
+    .await
+    .unwrap();
 
     let alice_balance_after = balance_of(token_signer_alice, alice_address).await.unwrap();
     let bob_balance_after = balance_of(token_signer_alice, bob_address).await.unwrap();
@@ -183,7 +189,6 @@ async fn transfer_from_test() {
     assert_eq!(alice_balance_after - alice_balance_before, amount_transfer);
     assert_eq!(bob_balance_before - bob_balance_after, amount_transfer);
 }
-
 
 #[tokio::test]
 async fn approve_test() {
@@ -195,11 +200,21 @@ async fn approve_test() {
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 100.into();
 
-    approve(token_signer_alice, bob_address, 0.into()).await.unwrap();
-    let allowance_before = token_signer_alice.allowance(alice_address, bob_address).await.unwrap();
+    approve(token_signer_alice, bob_address, 0.into())
+        .await
+        .unwrap();
+    let allowance_before = token_signer_alice
+        .allowance(alice_address, bob_address)
+        .await
+        .unwrap();
 
-    approve(token_signer_alice, bob_address, amount).await.unwrap();
-    let allowance_after = token_signer_alice.allowance(alice_address, bob_address).await.unwrap();
+    approve(token_signer_alice, bob_address, amount)
+        .await
+        .unwrap();
+    let allowance_after = token_signer_alice
+        .allowance(alice_address, bob_address)
+        .await
+        .unwrap();
 
     assert_eq!(allowance_before, 0.into());
     assert_eq!(allowance_after, amount);
@@ -235,9 +250,15 @@ async fn transfer_balance_too_small_error_test() {
     let amount_mint: U256 = 1000.into();
     let amount_transfer: U256 = amount_mint * 2;
 
-    let alice_balance = token_signer_alice.balance_of(alice_address).call().await.unwrap();
+    let alice_balance = token_signer_alice
+        .balance_of(alice_address)
+        .call()
+        .await
+        .unwrap();
     // burn all alice tokens - set alice account to 0 tokens
-    burn(token_signer_alice, alice_address, alice_balance).await.unwrap();
+    burn(token_signer_alice, alice_address, alice_balance)
+        .await
+        .unwrap();
     // from alice to bob
     let tx = transfer(token_signer_alice, bob_address, amount_transfer).await;
 
@@ -286,9 +307,6 @@ async fn transfer_from_amount_bigger_than_allowance_error_test() {
     let amount_allowance: U256 = 100.into();
     let amount_transfer: U256 = amount_allowance * 2;
 
-    let alice_address = fixtures.alice_wallet.address();
-    let token_signer_alice = &fixtures.token_signer_alice;
-
     // give bob some tokens
     mint(token_signer_bob, bob_address, 1000.into()).await.unwrap();
     // approve alice to spend bob's tokens, must be signed by bob
@@ -303,7 +321,8 @@ async fn transfer_from_amount_bigger_than_allowance_error_test() {
         bob_address,
         alice_address,
         amount_transfer,
-    ).await;
+    )
+    .await;
 
     match tx {
         Ok(_) => panic!("transfer from tx should fail"),
@@ -317,95 +336,86 @@ async fn transfer_from_amount_bigger_than_allowance_error_test() {
 
 /*** Erc20 helper functions ***/
 
-async fn balance_of(erc20_token: &MyTokenType, account: Address) -> eyre::Result<U256> {
-    let balance: U256 = erc20_token.balance_of(account).call().await?;
+async fn balance_of(my_token_signer: &MyTokenType, account: Address) -> eyre::Result<U256> {
+    let balance: U256 = my_token_signer.balance_of(account).call().await?;
     Ok(balance)
 }
 
 async fn mint(
-    erc20_token: &MyTokenType,
+    my_token_signer: &MyTokenType,
     account: Address,
     amount: U256,
 ) -> eyre::Result<TransactionReceipt> {
-    let tx: TransactionReceipt = erc20_token
+    my_token_signer
         .mint(account, amount)
         .send()
         .await?
         .await?
-        .expect("Mint tx returned non");
-
-    Ok(tx)
+        .ok_or(Report::msg("mint tx error"))
 }
 
 async fn burn(
-    erc20_token: &MyTokenType,
+    my_token_signer: &MyTokenType,
     to: Address,
     amount: U256,
 ) -> eyre::Result<TransactionReceipt> {
-    let tx: TransactionReceipt = erc20_token
+    my_token_signer
         .burn(to, amount)
         .send()
         .await?
         .await?
-        .expect("Burn tx returned non");
-
-    Ok(tx)
+        .ok_or(Report::msg("burn tx error"))
 }
 
 async fn transfer(
-    my_token: &MyTokenType,
+    my_token_signer: &MyTokenType,
     to: Address,
     amount: U256,
 ) -> eyre::Result<TransactionReceipt> {
-    let tx: TransactionReceipt = my_token
+    my_token_signer
         .transfer(to, amount)
         .send()
         .await?
         .await?
-        .expect("transfer tx returned non");
-
-    Ok(tx)
+        .ok_or(Report::msg("transfer tx error"))
 }
 
 async fn approve(
-    my_token_owner_signer: &MyTokenType,
+    my_token_signer: &MyTokenType,
     spender: Address,
     amount: U256,
 ) -> eyre::Result<TransactionReceipt> {
-    let tx: TransactionReceipt = my_token_owner_signer
+    my_token_signer
         .approve(spender, amount)
         .send()
         .await?
         .await?
-        .expect("approve tx returned non");
-
-    Ok(tx)
+        .ok_or(Report::msg("transfer tx error"))
 }
 
 async fn transfer_from(
-    my_token: &MyTokenType,
+    my_token_signer: &MyTokenType,
     from: Address,
     to: Address,
     amount: U256,
 ) -> eyre::Result<TransactionReceipt> {
-    let tx: TransactionReceipt = my_token
+    my_token_signer
         .transfer_from(from, to, amount)
         .send()
         .await?
         .await?
-        .expect("transfer from tx returned non");
-
-    Ok(tx)
+        .ok_or(Report::msg("transfer from tx error"))
 }
 
 /*** Fixtures helper functions  ***/
 
 async fn init_fixtures() -> eyre::Result<&'static Mutex<Fixtures>> {
-    FIXTURES.get_or_try_init(|| async {
-        let fixtures = fill_fixtures().await?;
-        Ok(Mutex::new(fixtures))
-    })
-    .await
+    FIXTURES
+        .get_or_try_init(|| async {
+            let fixtures = fill_fixtures().await?;
+            Ok(Mutex::new(fixtures))
+        })
+        .await
 }
 
 async fn fill_fixtures() -> eyre::Result<Fixtures> {
@@ -449,9 +459,5 @@ async fn fill_fixtures() -> eyre::Result<Fixtures> {
 }
 
 fn read_secret_from_file(fpath: &str) -> eyre::Result<String> {
-    let f = std::fs::File::open(fpath)?;
-    let mut buf_reader = BufReader::new(f);
-    let mut secret = String::new();
-    buf_reader.read_line(&mut secret)?;
-    Ok(secret.trim().to_string())
+    Ok(std::fs::read_to_string(fpath)?)
 }

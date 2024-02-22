@@ -230,9 +230,5 @@ async fn init_fixtures() -> eyre::Result<Fixtures>  {
 }
 
 fn read_secret_from_file(fpath: &str) -> eyre::Result<String> {
-    let f = std::fs::File::open(fpath)?;
-    let mut buf_reader = BufReader::new(f);
-    let mut secret = String::new();
-    buf_reader.read_line(&mut secret)?;
-    Ok(secret.trim().to_string())
+    Ok(std::fs::read_to_string(fpath)?)
 }
