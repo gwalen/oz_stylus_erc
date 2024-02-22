@@ -1,6 +1,5 @@
 use alloc::{string::String, vec::Vec};
-use core::{marker::PhantomData, panic};
-use std::f32::consts::E;
+use core::marker::PhantomData;
 use stylus_sdk::{
     alloy_primitives::{Address, U256},
     alloy_sol_types::{sol, SolError},
@@ -49,15 +48,15 @@ sol! {
     error Erc20InsufficientAllowance(address sender, uint256 allowance, uint256 needed);
 
     /// Indicates a failure with the `approver` of a token to be approved. Used in approvals.
-    /// * `approver` - Address initiating an approval operation.
+    /// * `approver` - address initiating an approval operation.
     error Erc20InvalidApprover(address approver);
 
     /// Indicates a failure with the `spender` to be approved. Used in approvals.
-    /// * `spender` - Address that may be allowed to operate on tokens without being their owner.
+    /// * `spender` - address that may be allowed to operate on tokens without being their owner.
     error Erc20InvalidSpender(address spender);
 
     /// Indicates a failure with the token `receiver`. Used in transfers.
-    /// * `receiver` - Address to which tokens are being transferred.
+    /// * `receiver` - address to which tokens are being transferred.
     error Erc20InvalidReceiver(address receiver);
 }
 
@@ -114,6 +113,44 @@ impl<T: Erc20Params> Erc20<T> {
             }));
         }
         self.update(account, Address::ZERO, value)
+    }
+
+    /// Transfers a `value` amount of tokens from `from` to `to`, or alternatively mints (or burns) if `from`
+    /// (or `to`) is the zero address. All customizations to transfers, mints, and burns should be done by overriding
+    /// this function.
+    ///
+    /// Emits a {Transfer} event.
+    pub fn update(&mut self, from: Address, to: Address, value: U256) -> Result<(), Erc20Error> {
+        if from == Address::ZERO {  // mint
+            let total_supply = self.total_supply.get();
+            self.total_supply.set(total_supply + value);
+        } else {
+            let mut from_balance_ref = self.balances.setter(from);
+            let from_balance_value = from_balance_ref.get();
+            if from_balance_value < value {
+                return  Err(Erc20Error::Erc20InsufficientBalance(Erc20InsufficientBalance {
+                    sender: from,
+                    balance: from_balance_value,
+                    needed: value,
+                }));
+            }
+            // Overflow not possible: value <= fromBalance <= totalSupply.
+            from_balance_ref.set(from_balance_value - value);
+        }
+        
+        if to == Address::ZERO {  // burn
+            // Overflow not possible: value <= totalSupply or value <= fromBalance <= totalSupply.
+            let total_supply = self.total_supply.get();
+            self.total_supply.set(total_supply - value);
+        } else {
+            let mut to_balance_ref = self.balances.setter(to);
+            let to_balance_value = to_balance_ref.get();
+            // Overflow not possible: balance + value is at most totalSupply, which we know fits into a uint256.
+            to_balance_ref.set(to_balance_value + value);
+        }
+
+        evm::log(Transfer { from, to, value });
+        Ok(())
     }
 }
 
@@ -209,45 +246,7 @@ impl<T: Erc20Params> Erc20<T> {
         self.update(from, to, value)
     }
 
-    /// Transfers a `value` amount of tokens from `from` to `to`, or alternatively mints (or burns) if `from`
-    /// (or `to`) is the zero address. All customizations to transfers, mints, and burns should be done by overriding
-    /// this function.
-    ///
-    /// Emits a {Transfer} event.
-    // TODO: move of external block - this function should not be exposed but it should be able allowed to be overridden
-    //       check if that would work with private method like update is declared now
-    fn update(&mut self, from: Address, to: Address, value: U256) -> Result<(), Erc20Error> {
-        if from == Address::ZERO {  // mint
-            let total_supply = self.total_supply.get();
-            self.total_supply.set(total_supply + value);
-        } else {
-            let mut from_balance_ref = self.balances.setter(from);
-            let from_balance_value = from_balance_ref.get();
-            if from_balance_value < value {
-                return  Err(Erc20Error::Erc20InsufficientBalance(Erc20InsufficientBalance {
-                    sender: from,
-                    balance: from_balance_value,
-                    needed: value,
-                }));
-            }
-            // Overflow not possible: value <= fromBalance <= totalSupply.
-            from_balance_ref.set(from_balance_value - value);
-        }
-        
-        if to == Address::ZERO {  // burn
-            // Overflow not possible: value <= totalSupply or value <= fromBalance <= totalSupply.
-            let total_supply = self.total_supply.get();
-            self.total_supply.set(total_supply - value);
-        } else {
-            let mut to_balance_ref = self.balances.setter(to);
-            let to_balance_value = to_balance_ref.get();
-            // Overflow not possible: balance + value is at most totalSupply, which we know fits into a uint256.
-            to_balance_ref.set(to_balance_value + value);
-        }
-
-        evm::log(Transfer { from, to, value });
-        Ok(())
-    }
+    
 
     fn approve_internal(
         &mut self,
