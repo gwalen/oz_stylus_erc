@@ -235,9 +235,9 @@ impl<T: Erc20Params> Erc20<T> {
         if from == Address::ZERO {
             return Err(Erc20Error::Erc20InvalidSpender(Erc20InvalidSpender {
                 spender: Address::ZERO,
-            }));
+            }));    
         }
-        if from == Address::ZERO {
+        if to == Address::ZERO {
             return Err(Erc20Error::Erc20InvalidReceiver(Erc20InvalidReceiver {
                 receiver: Address::ZERO,
             }));

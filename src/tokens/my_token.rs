@@ -1,16 +1,12 @@
 
-use alloc::vec::Vec;
 use stylus_sdk::{
     alloy_primitives::{Address, U256},
-    alloy_sol_types::{sol, SolError},
-    evm, msg,
     prelude::*,
 };
 
-use super::erc20::{self, Erc20, Erc20Params, Erc20Error};
-// TODO: remove unused imports
+use super::erc20::{Erc20, Erc20Params, Erc20Error};
 
-struct MyTokenParams;
+pub struct MyTokenParams;
 
 impl Erc20Params for MyTokenParams {
     const NAME: &'static str = "My test erc20 token";
@@ -31,8 +27,13 @@ sol_storage! {
 impl MyToken {
 
     // for testing purposes, anyone can mint
-    pub fn mint(&mut self, to: Address, amount: U256) -> Result<(), Erc20Error> {
-        self.erc20.mint(to, amount)
+    pub fn mint(&mut self, account: Address, amount: U256) -> Result<(), Erc20Error> {
+        self.erc20.mint(account, amount)
+    }
+
+    // for testing purposes, anyone can burn
+    pub fn burn(&mut self, account: Address, amount: U256) -> Result<(), Erc20Error> {
+        self.erc20.burn(account, amount)
     }
 
 }
