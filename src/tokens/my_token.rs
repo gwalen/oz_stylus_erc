@@ -4,6 +4,8 @@ use stylus_sdk::{
     prelude::*,
 };
 
+use crate::extensions::erc20_burnable::Erc20Burnable;
+
 use super::erc20::{Erc20, Erc20Params, Erc20Error};
 
 pub struct MyTokenParams;
@@ -19,11 +21,23 @@ sol_storage! {
     pub struct MyToken {
         #[borrow] // inheritance is done with Rust composition plus Stylus magic
         Erc20<MyTokenParams> erc20;
+        #[borrow]
+        Erc20Burnable<MyTokenParams> erc20_burnable;
     }
 }
 
+impl MyToken {
+
+    // for testing purposes, anyone can mint
+    // pub fn erc20_get(&mut self) -> Result<&'static mut Erc20<MyTokenParams>, Erc20Error> {
+    //     Ok(self)
+    // }
+
+}
+
+
 #[external]
-#[inherit(Erc20<MyTokenParams>)]
+#[inherit(Erc20<MyTokenParams>, Erc20Burnable<MyTokenParams>)]
 impl MyToken {
 
     // for testing purposes, anyone can mint
