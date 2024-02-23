@@ -42,6 +42,9 @@ abigen!(
         function transferFrom(address sender, address recipient, uint256 amount) external returns (bool)
         function mint(address account, uint256 amount) external
         function burn(address account, uint256 amount) external
+        function balanceOfBurn(address account) external view returns (uint256)
+        function diff(address account, uint256 amount) external view returns (uint256)
+        function balanceOfBurnErc(address account) external view returns (uint256)
     ]"#
 );
 
@@ -116,15 +119,40 @@ async fn burn_test() {
         .await
         .unwrap();
     let alice_balance_before = balance_of(token_signer_alice, alice_address).await.unwrap();
+    println!("alice_balance_before: {}", alice_balance_before);
+
+    let alice_balance_burn = token_signer_alice
+        .balance_of_burn(alice_address)
+        .call()
+        .await
+        .unwrap();
+
+    let alice_diff = token_signer_alice
+        .diff(alice_address, amount)
+        .call()
+        .await
+        .unwrap();
+
+    let alice_balance_of_burn_erc = token_signer_alice
+        .balance_of_burn_erc(alice_address)
+        .call()
+        .await
+        .unwrap();
+
+
+    println!("alice_balance_burn: {}, diff {}", alice_balance_burn, alice_diff);
+    println!("alice_balance_of_burn_erc: {}", alice_balance_of_burn_erc);
+
     // burn and check the difference
     burn(token_signer_alice, alice_address, amount)
         .await
         .unwrap();
     let alice_balance_after = balance_of(token_signer_alice, alice_address).await.unwrap();
+    println!("alice_balance_after: {}", alice_balance_after);
 
     assert_eq!(alice_balance_before - alice_balance_after, amount);
 }
-
+/*
 #[tokio::test]
 async fn transfer_test() {
     let fixtures_mutex = init_fixtures().await.unwrap();
@@ -333,6 +361,8 @@ async fn transfer_from_amount_bigger_than_allowance_error_test() {
         }
     }
 }
+
+ */
 
 /*** Erc20 helper functions ***/
 

@@ -22,7 +22,7 @@ sol_storage! {
         #[borrow] // inheritance is done with Rust composition plus Stylus magic
         Erc20<MyTokenParams> erc20;
         #[borrow]
-        Erc20Burnable<MyTokenParams> erc20_burnable;
+        Erc20Burnable erc20_burnable;
     }
 }
 
@@ -37,7 +37,7 @@ impl MyToken {
 
 
 #[external]
-#[inherit(Erc20<MyTokenParams>, Erc20Burnable<MyTokenParams>)]
+#[inherit(Erc20<MyTokenParams>, Erc20Burnable)]
 impl MyToken {
 
     // for testing purposes, anyone can mint
@@ -45,9 +45,14 @@ impl MyToken {
         self.erc20.mint(account, amount)
     }
 
-    // for testing purposes, anyone can burn
-    pub fn burn(&mut self, account: Address, amount: U256) -> Result<(), Erc20Error> {
-        self.erc20.burn(account, amount)
+    pub fn balance_of_burn_erc(&self, address: Address) -> Result<U256, Erc20Error> {
+        self.erc20_burnable.balance_of_burn(address)
     }
+
+    // TODO: new burn should be implemented by Burnable
+    // for testing purposes, anyone can burn
+    // pub fn burn(&mut self, account: Address, amount: U256) -> Result<(), Erc20Error> {
+    //     self.erc20.burn(account, amount)
+    // }
 
 }
