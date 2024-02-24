@@ -127,7 +127,7 @@ async fn burn_test() {
 
     assert_eq!(alice_balance_before - alice_balance_after, amount);
 }
-/*
+
 #[tokio::test]
 async fn transfer_test() {
     let fixtures_mutex = init_fixtures().await.unwrap();
@@ -259,7 +259,7 @@ async fn transfer_balance_too_small_error_test() {
         .await
         .unwrap();
     // burn all alice tokens - set alice account to 0 tokens
-    burn(token_signer_alice, alice_address, alice_balance)
+    burn(token_signer_alice, alice_balance)
         .await
         .unwrap();
     // from alice to bob
@@ -336,8 +336,6 @@ async fn transfer_from_amount_bigger_than_allowance_error_test() {
         }
     }
 }
-
- */
 
 /*** Erc20 helper functions ***/
 

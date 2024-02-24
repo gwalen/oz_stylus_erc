@@ -15,13 +15,13 @@ impl Erc20Burnable  {
 
     // due to error in Stylus (https://github.com/OffchainLabs/stylus-sdk-rs/issues/106)
     // this will be implemented in body of MyToken
-    pub fn burn(&mut self, amount: U256) -> Result<(), Erc20Error> {
+    pub fn burn(&mut self, _amount: U256) -> Result<(), Erc20Error> {
         Err(Erc20Error::FunctionNotImplemented(FunctionNotImplemented{}))
     }
 
     // due to error in Stylus (https://github.com/OffchainLabs/stylus-sdk-rs/issues/106)
     // this will be implemented in body of MyToken
-    pub fn burn_from(&mut self, account: Address, amount: U256) -> Result<(), Erc20Error> {
+    pub fn burn_from(&mut self, _account: Address, _amount: U256) -> Result<(), Erc20Error> {
         Err(Erc20Error::FunctionNotImplemented(FunctionNotImplemented{}))
     }
     
