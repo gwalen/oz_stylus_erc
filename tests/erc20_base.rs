@@ -45,6 +45,7 @@ abigen!(
         function balanceOfBurn(address account) external view returns (uint256)
         function diff(address account, uint256 amount) external view returns (uint256)
         function balanceOfBurnErc(address account) external view returns (uint256)
+        function balanceOfDirect(address account) external view returns (uint256)
     ]"#
 );
 
@@ -139,9 +140,15 @@ async fn burn_test() {
         .await
         .unwrap();
 
+    let alice_balance_of_direct = token_signer_alice
+        .balance_of_direct(alice_address)
+        .call()
+        .await
+        .unwrap();
 
     println!("alice_balance_burn: {}, diff {}", alice_balance_burn, alice_diff);
     println!("alice_balance_of_burn_erc: {}", alice_balance_of_burn_erc);
+    println!("alice_balance_of_direct: {}", alice_balance_of_direct);
 
     // burn and check the difference
     burn(token_signer_alice, alice_address, amount)

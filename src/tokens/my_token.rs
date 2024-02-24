@@ -26,16 +26,6 @@ sol_storage! {
     }
 }
 
-impl MyToken {
-
-    // for testing purposes, anyone can mint
-    // pub fn erc20_get(&mut self) -> Result<&'static mut Erc20<MyTokenParams>, Erc20Error> {
-    //     Ok(self)
-    // }
-
-}
-
-
 #[external]
 #[inherit(Erc20<MyTokenParams>, Erc20Burnable)]
 impl MyToken {
@@ -47,6 +37,10 @@ impl MyToken {
 
     pub fn balance_of_burn_erc(&self, address: Address) -> Result<U256, Erc20Error> {
         self.erc20_burnable.balance_of_burn(address)
+    }
+
+    pub fn balance_of_direct(&self, address: Address) -> Result<U256, Erc20Error> {
+        Ok(self.erc20.balances.get(address))
     }
 
     // TODO: new burn should be implemented by Burnable
