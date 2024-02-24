@@ -58,6 +58,10 @@ sol! {
     /// Indicates a failure with the token `receiver`. Used in transfers.
     /// * `receiver` - address to which tokens are being transferred.
     error Erc20InvalidReceiver(address receiver);
+
+    /** Non Erc errors **/
+    
+    error FunctionNotImplemented();
 }
 
 pub enum Erc20Error {
@@ -66,6 +70,7 @@ pub enum Erc20Error {
     Erc20InvalidSpender(Erc20InvalidSpender),
     Erc20InvalidApprover(Erc20InvalidApprover),
     Erc20InvalidReceiver(Erc20InvalidReceiver),
+    FunctionNotImplemented(FunctionNotImplemented),    
 }
 
 impl From<Erc20Error> for Vec<u8> {
@@ -76,6 +81,7 @@ impl From<Erc20Error> for Vec<u8> {
             Erc20Error::Erc20InvalidSpender(e) => e.encode(),
             Erc20Error::Erc20InvalidApprover(e) => e.encode(),
             Erc20Error::Erc20InvalidReceiver(e) => e.encode(),
+            Erc20Error::FunctionNotImplemented(e) => e.encode(),
         }
     }
 }
@@ -150,6 +156,21 @@ impl<T: Erc20Params> Erc20<T> {
         }
 
         evm::log(Transfer { from, to, value });
+        Ok(())
+    }
+
+    pub fn spend_allowance(&mut self, owner: Address, spender: Address, value: U256) -> Result<(), Erc20Error> {
+        let current_allowance = self.allowances.get(owner).get(spender);
+        if current_allowance != U256::MAX {
+            if current_allowance < value {
+                return Err(Erc20Error::Erc20InsufficientAllowance(Erc20InsufficientAllowance {
+                    sender: owner,
+                    allowance: current_allowance,
+                    needed: value,
+                }));
+            }
+            self.approve_internal_conditional(owner, spender, current_allowance - value, false)?;
+        }
         Ok(())
     }
 }
@@ -231,6 +252,8 @@ impl<T: Erc20Params> Erc20<T> {
         Ok(true)
     }
 
+    /*** Internal helper functions ***/
+
     fn transfer_internal(&mut self, from: Address, to: Address, value: U256) -> Result<(), Erc20Error> {
         if from == Address::ZERO {
             return Err(Erc20Error::Erc20InvalidSpender(Erc20InvalidSpender {
@@ -245,8 +268,6 @@ impl<T: Erc20Params> Erc20<T> {
 
         self.update(from, to, value)
     }
-
-    
 
     fn approve_internal(
         &mut self,
@@ -283,21 +304,6 @@ impl<T: Erc20Params> Erc20<T> {
                 spender,
                 value,
             });
-        }
-        Ok(())
-    }
-
-    fn spend_allowance(&mut self, owner: Address, spender: Address, value: U256) -> Result<(), Erc20Error> {
-        let current_allowance = self.allowances.get(owner).get(spender);
-        if current_allowance != U256::MAX {
-            if current_allowance < value {
-                return Err(Erc20Error::Erc20InsufficientAllowance(Erc20InsufficientAllowance {
-                    sender: owner,
-                    allowance: current_allowance,
-                    needed: value,
-                }));
-            }
-            self.approve_internal_conditional(owner, spender, current_allowance - value, false)?;
         }
         Ok(())
     }

@@ -41,11 +41,7 @@ abigen!(
         function approve(address spender, uint256 amount) external returns (bool)
         function transferFrom(address sender, address recipient, uint256 amount) external returns (bool)
         function mint(address account, uint256 amount) external
-        function burn(address account, uint256 amount) external
-        function balanceOfBurn(address account) external view returns (uint256)
-        function diff(address account, uint256 amount) external view returns (uint256)
-        function balanceOfBurnErc(address account) external view returns (uint256)
-        function balanceOfDirect(address account) external view returns (uint256)
+        function burn(uint256 amount) external
     ]"#
 );
 
@@ -122,36 +118,8 @@ async fn burn_test() {
     let alice_balance_before = balance_of(token_signer_alice, alice_address).await.unwrap();
     println!("alice_balance_before: {}", alice_balance_before);
 
-    let alice_balance_burn = token_signer_alice
-        .balance_of_burn(alice_address)
-        .call()
-        .await
-        .unwrap();
-
-    let alice_diff = token_signer_alice
-        .diff(alice_address, amount)
-        .call()
-        .await
-        .unwrap();
-
-    let alice_balance_of_burn_erc = token_signer_alice
-        .balance_of_burn_erc(alice_address)
-        .call()
-        .await
-        .unwrap();
-
-    let alice_balance_of_direct = token_signer_alice
-        .balance_of_direct(alice_address)
-        .call()
-        .await
-        .unwrap();
-
-    println!("alice_balance_burn: {}, diff {}", alice_balance_burn, alice_diff);
-    println!("alice_balance_of_burn_erc: {}", alice_balance_of_burn_erc);
-    println!("alice_balance_of_direct: {}", alice_balance_of_direct);
-
     // burn and check the difference
-    burn(token_signer_alice, alice_address, amount)
+    burn(token_signer_alice, amount)
         .await
         .unwrap();
     let alice_balance_after = balance_of(token_signer_alice, alice_address).await.unwrap();
@@ -393,11 +361,10 @@ async fn mint(
 
 async fn burn(
     my_token_signer: &MyTokenType,
-    to: Address,
     amount: U256,
 ) -> eyre::Result<TransactionReceipt> {
     my_token_signer
-        .burn(to, amount)
+        .burn(amount)
         .send()
         .await?
         .await?
