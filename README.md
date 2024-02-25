@@ -5,7 +5,7 @@
 Deploy to Arbitrum Stylus testnet 
 ```
 cargo stylus deploy \
-  --private-key-path=./.secret/pk.key
+  --private-key-path=./.secret/alice_pk.key
 ```  
 
 Can verify the deployment on the block explorer : https://stylus-testnet-explorer.arbitrum.io/
@@ -17,6 +17,13 @@ Run rust script from examples directory:
 `cargo run --example my_token --target=aarch64-apple-darwin`
 
 ## Test
+
+Run tests :
+```
+cargo test --test erc20_base -- --nocapture
+cargo test --test erc20_burnable -- --nocapture
+cargo test --test erc20_pausable -- --nocapture
+```
 
 **Note:** 
 

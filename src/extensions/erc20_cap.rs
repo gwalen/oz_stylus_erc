@@ -24,8 +24,8 @@ sol! {
 }
 
 pub enum Erc20CapError {
-    ERC20ExceededCap(ERC20ExceededCap),
-    ERC20InvalidCap(ERC20InvalidCap),
+    ERC20ExceededCap(ERC20ExceededCap),    // 0x9e79f854
+    ERC20InvalidCap(ERC20InvalidCap),      // 0x392e1e27
 }
 
 impl From<Erc20CapError> for Vec<u8> {

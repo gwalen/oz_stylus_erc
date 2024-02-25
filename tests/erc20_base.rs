@@ -93,31 +93,6 @@ async fn mint_test() {
     assert_eq!(alice_balance_after - alice_balance_before, amount);
 }
 
-// TODO: remove - tested in burnable test file
-#[tokio::test]
-async fn burn_test() {
-    let fixtures_mutex = init_fixtures().await.unwrap();
-    let fixtures = fixtures_mutex.lock().await;
-
-    let alice_address = fixtures.alice_wallet.address();
-    let token_signer_alice = &fixtures.token_signer_alice;
-    let amount: U256 = 1000.into();
-
-    // first get some tokens
-    mint(token_signer_alice, alice_address, amount)
-        .await
-        .unwrap();
-    let alice_balance_before = balance_of(token_signer_alice, alice_address).await.unwrap();
-
-    // burn and check the difference
-    burn(token_signer_alice, amount)
-        .await
-        .unwrap();
-    let alice_balance_after = balance_of(token_signer_alice, alice_address).await.unwrap();
-
-    assert_eq!(alice_balance_before - alice_balance_after, amount);
-}
-
 #[tokio::test]
 async fn transfer_test() {
     let fixtures_mutex = init_fixtures().await.unwrap();

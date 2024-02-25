@@ -1,13 +1,16 @@
-
 use alloy_sol_types::sol;
 use stylus_sdk::{
-    alloy_primitives::{Address, U256}, msg, prelude::*,
+    alloy_primitives::{Address, U256},
     alloy_sol_types::SolError,
+    msg,
+    prelude::*,
 };
 
-use crate::extensions::{erc20_burnable::Erc20Burnable, erc20_cap::Erc20Cap, erc20_pausable::Erc20Pausable};
+use crate::extensions::{
+    erc20_burnable::Erc20Burnable, erc20_cap::Erc20Cap, erc20_pausable::Erc20Pausable,
+};
 
-use super::erc20::{Erc20, Erc20Params, Erc20Error};
+use super::erc20::{Erc20, Erc20Error, Erc20InvalidReceiver, Erc20InvalidSpender, Erc20Params};
 
 pub struct MyTokenParams;
 
@@ -49,20 +52,18 @@ impl From<MyTokenError> for Vec<u8> {
 }
 
 impl MyToken {
-
     /*** Erc20Pausable and Erc20Cap methods ***/
 
-    /// override update(..) :
-    ///   - function from Erc20 to only run when contract is not Paused
-    ///   - checks if after balance update cap was not exceeded
+    /// Definition of update() from Erc20 with additional functionalities
     /// Notice:
-    ///   - return error type is Vec<u8> because now update(..) can return errors from: Erc20Error | Erc20Pausable | Erc20Cap
+    ///  - this methods does not override update(..) from Erc20 - this is a bug is Stylus
+    ///  - return error type is Vec<u8> because now update(..) can return errors from: Erc20Error | Erc20Pausable | Erc20Cap
     pub fn update(&mut self, from: Address, to: Address, value: U256) -> Result<(), Vec<u8>> {
         self.erc20_pausable.when_not_paused()?;
 
         self.erc20.update(from, to, value)?;
 
-        self.erc20_cap.when_cap_not_exceeded(self.erc20.total_supply.get())?;
+        // self.erc20_cap.when_cap_not_exceeded(self.erc20.total_supply.get())?;
         Ok(())
     }
 }
@@ -70,17 +71,71 @@ impl MyToken {
 #[external]
 #[inherit(Erc20<MyTokenParams>, Erc20Burnable, Erc20Pausable, Erc20Cap)]
 impl MyToken {
-
     // constructor like function
     pub fn init(&mut self, cap: U256) -> Result<(), Vec<u8>> {
-        
         self.erc20_cap.init_cap(cap)?;
         Ok(())
     }
 
+    pub fn is_paused(&self) -> Result<bool, Erc20Error> {
+        Ok(self.erc20_pausable.paused.get())
+    }
+
+    //TODO:
+    // add pausable to:
+    // - mint
+    // - burn 
+    // - burn_from 
+    // - transfer 
+    // - transfer_from 
+
+    /*** Erc20 methods manual override due to Stylus bug (109) ***/
+
     // for testing purposes, anyone can mint
-    pub fn mint(&mut self, account: Address, amount: U256) -> Result<(), Erc20Error> {
-        self.erc20.mint(account, amount)
+    pub fn mint(&mut self, account: Address, amount: U256) -> Result<(), Vec<u8>> {
+        self.erc20_pausable.when_not_paused()?;
+        self.erc20.mint(account, amount)?;
+        Ok(())
+    }
+
+    pub fn transfer(&mut self, to: Address, value: U256) -> Result<bool, Vec<u8>> {
+        let owner = msg::sender();
+        self.transfer_internal(owner, to, value)?;
+        Ok(true)
+    }
+
+    pub fn transfer_from(
+        &mut self,
+        from: Address,
+        to: Address,
+        value: U256,
+    ) -> Result<bool, Vec<u8>> {
+        let spender = msg::sender();
+        self.erc20.spend_allowance(from, spender, value)?;
+        self.transfer_internal(from, to, value)?;
+        Ok(true)
+    }
+
+    fn transfer_internal(
+        &mut self,
+        from: Address,
+        to: Address,
+        value: U256,
+    ) -> Result<(), Vec<u8>> {
+        if from == Address::ZERO {
+            return Err(Erc20Error::Erc20InvalidSpender(Erc20InvalidSpender {
+                spender: Address::ZERO,
+            })
+            .into());
+        }
+        if to == Address::ZERO {
+            return Err(Erc20Error::Erc20InvalidReceiver(Erc20InvalidReceiver {
+                receiver: Address::ZERO,
+            })
+            .into());
+        }
+
+        self.update(from, to, value)
     }
 
     /*** Erc20Burnable methods ***/
@@ -93,5 +148,4 @@ impl MyToken {
         self.erc20.spend_allowance(account, msg::sender(), amount)?;
         self.erc20.burn(account, amount)
     }
-
 }

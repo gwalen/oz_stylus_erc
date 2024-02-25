@@ -50,7 +50,10 @@ impl Erc20Pausable {
         }
         Ok(())
     }
+}
 
+#[external]
+impl Erc20Pausable {
     pub fn pause(&mut self) -> Result<(), Erc20PausableError> {
         self.paused.set(true);
         evm::log(Paused { account: msg::sender() });
@@ -63,6 +66,3 @@ impl Erc20Pausable {
         Ok(())
     }
 }
-
-#[external]
-impl Erc20Pausable {}
