@@ -23,7 +23,7 @@ impl Erc20Params for MyTokenParams {
 sol_storage! {
     #[entrypoint]   // Makes MyToken the entrypoint
     pub struct MyToken {
-        bool was_initialized;
+        bool initialized;
         #[borrow]
         Erc20<MyTokenParams> erc20;
         #[borrow]
@@ -40,7 +40,7 @@ sol! {
 }
 
 pub enum MyTokenError {
-    AlreadyInitialized(AlreadyInitialized),  //0x0dc149f0
+    AlreadyInitialized(AlreadyInitialized),
 }
 
 impl From<MyTokenError> for Vec<u8> {
@@ -52,18 +52,15 @@ impl From<MyTokenError> for Vec<u8> {
 }
 
 impl MyToken {
-    /*** Erc20Pausable and Erc20Cap methods ***/
+    /*** Erc20Pausable ***/
 
     /// Definition of update() from Erc20 with additional functionalities
     /// Notice:
     ///  - this methods does not override update(..) from Erc20 - this is a bug is Stylus
-    ///  - return error type is Vec<u8> because now update(..) can return errors from: Erc20Error | Erc20Pausable | Erc20Cap
+    ///  - return error type is Vec<u8> because now update(..) can return errors from: Erc20Error | Erc20Pausable
     pub fn update(&mut self, from: Address, to: Address, value: U256) -> Result<(), Vec<u8>> {
         self.erc20_pausable.when_not_paused()?;
-
         self.erc20.update(from, to, value)?;
-
-        // self.erc20_cap.when_cap_not_exceeded(self.erc20.total_supply.get())?;
         Ok(())
     }
 }
@@ -73,21 +70,34 @@ impl MyToken {
 impl MyToken {
     // constructor like function
     pub fn init(&mut self, cap: U256) -> Result<(), Vec<u8>> {
-        self.erc20_cap.init_cap(cap)?;
+        if self.initialized.get() {
+            return Err(MyTokenError::AlreadyInitialized(AlreadyInitialized {}).into());
+        }
+        self.erc20_cap.set_cap(cap)?;
+        self.initialized.set(true);
         Ok(())
     }
+
+    // we this to set cap on demand for testing
+    pub fn set_cap(&mut self, cap: U256) -> Result<(), Vec<u8>> {
+        self.erc20_cap.set_cap(cap)?;
+        Ok(())
+    }
+
+    //TODO:
+    // - add init() call to all tests !
 
     pub fn is_paused(&self) -> Result<bool, Erc20Error> {
         Ok(self.erc20_pausable.paused.get())
     }
 
-    //TODO:
-    // add pausable to:
-    // - mint
-    // - burn 
-    // - burn_from 
-    // - transfer 
-    // - transfer_from 
+    pub fn cap(&self) -> Result<U256, Erc20Error> {
+        Ok(self.erc20_cap.cap.get())
+    }
+
+    pub fn total_supply(&self) -> Result<U256, Erc20Error> {
+        Ok(self.erc20.total_supply.get())
+    }
 
     /*** Erc20 methods manual override due to Stylus bug (109) ***/
 
@@ -95,6 +105,7 @@ impl MyToken {
     pub fn mint(&mut self, account: Address, amount: U256) -> Result<(), Vec<u8>> {
         self.erc20_pausable.when_not_paused()?;
         self.erc20.mint(account, amount)?;
+        self.erc20_cap.when_cap_not_exceeded(self.erc20.total_supply.get())?;
         Ok(())
     }
 

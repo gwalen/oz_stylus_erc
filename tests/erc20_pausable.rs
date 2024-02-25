@@ -60,6 +60,8 @@ async fn mint_revert_when_paused_works_when_unpaused_test() {
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 1000.into();
 
+    // try to init (we need to set cap), if already initialized ignore error
+
     mint(token_signer_alice, alice_address, amount)
         .await
         .unwrap();

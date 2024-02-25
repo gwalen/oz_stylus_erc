@@ -23,6 +23,7 @@ Run tests :
 cargo test --test erc20_base -- --nocapture
 cargo test --test erc20_burnable -- --nocapture
 cargo test --test erc20_pausable -- --nocapture
+cargo test --test erc20_cap -- --nocapture
 ```
 
 **Note:** 

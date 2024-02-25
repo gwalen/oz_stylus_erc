@@ -7,10 +7,7 @@ use ethers::{
     types::{Address, TransactionReceipt, U256},
 };
 use eyre::{eyre, Report};
-use oz_stylus_erc::tokens::erc20::Erc20Params;
 use util::fixture_init::SharedFixtures;
-use std::str::FromStr;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::OnceCell;
 

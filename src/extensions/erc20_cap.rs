@@ -39,7 +39,7 @@ impl From<Erc20CapError> for Vec<u8> {
 
 impl Erc20Cap {
 
-    pub fn init_cap(&mut self, cap: U256) -> Result<(), Erc20CapError> {
+    pub fn set_cap(&mut self, cap: U256) -> Result<(), Erc20CapError> {
         if cap == U256::ZERO {
             return Err(Erc20CapError::ERC20InvalidCap(ERC20InvalidCap { cap }));
         }
