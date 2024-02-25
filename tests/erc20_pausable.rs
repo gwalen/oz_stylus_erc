@@ -17,6 +17,7 @@ mod util;
 abigen!(
     MyToken,
     r#"[
+        function init(uint256) external
         function balanceOf(address account) external view returns (uint256)
         function approve(address spender, uint256 amount) external returns (bool)
         function mint(address account, uint256 amount) external
@@ -61,6 +62,7 @@ async fn mint_revert_when_paused_works_when_unpaused_test() {
     let amount: U256 = 1000.into();
 
     // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
 
     mint(token_signer_alice, alice_address, amount)
         .await
@@ -89,6 +91,9 @@ async fn burn_revert_when_paused_works_when_unpaused_test() {
     let alice_address = fixtures.alice_wallet.address();
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 1000.into();
+
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
 
     mint(token_signer_alice, alice_address, amount)
         .await
@@ -121,6 +126,9 @@ async fn transfer_revert_when_paused_works_when_unpaused_test() {
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 1000.into();
 
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
+
     mint(token_signer_alice, alice_address, amount)
         .await
         .unwrap();
@@ -152,6 +160,9 @@ async fn transfer_from_revert_when_paused_works_when_unpaused_test() {
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 1000.into();
 
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
+
     mint(token_signer_alice, alice_address, amount).await.unwrap();
     approve(token_signer_alice, alice_address, amount).await.unwrap();
     // transfer should work here
@@ -181,6 +192,9 @@ async fn burn_from_revert_when_paused_works_when_unpaused_test() {
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 1000.into();
 
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
+
     mint(token_signer_alice, alice_address, amount).await.unwrap();
     approve(token_signer_alice, alice_address, amount).await.unwrap();
     // burn_from should work here
@@ -202,6 +216,18 @@ async fn burn_from_revert_when_paused_works_when_unpaused_test() {
 }
 
 /*** Erc20 helper functions ***/
+
+async fn init(
+    my_token_signer: &MyTokenType,
+    amount: U256,
+) -> eyre::Result<TransactionReceipt> {
+    my_token_signer
+        .init(amount)
+        .send()
+        .await?
+        .await?
+        .ok_or(Report::msg("init tx error"))
+}
 
 async fn mint(
     my_token_signer: &MyTokenType,

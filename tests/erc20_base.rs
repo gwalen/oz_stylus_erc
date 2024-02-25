@@ -1,16 +1,13 @@
-use dotenv::dotenv;
 use ethers::{
     middleware::SignerMiddleware,
     prelude::abigen,
-    providers::{Http, Middleware, Provider},
+    providers::{Http, Provider},
     signers::{LocalWallet, Signer},
     types::{Address, TransactionReceipt, U256},
 };
-use eyre::{eyre, Report};
+use eyre::Report;
 use oz_stylus_erc::tokens::erc20::Erc20Params;
 use util::fixture_init::SharedFixtures;
-use std::str::FromStr;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::OnceCell;
 
@@ -22,6 +19,7 @@ mod util;
 abigen!(
     MyToken,
     r#"[
+        function init(uint256) external
         function name() external view returns (string)
         function symbol() external view returns (string)
         function decimals() external view returns (uint8)
@@ -84,6 +82,9 @@ async fn mint_test() {
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 1000.into();
 
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
+
     let alice_balance_before = balance_of(token_signer_alice, alice_address).await.unwrap();
     mint(token_signer_alice, alice_address, amount)
         .await
@@ -103,6 +104,9 @@ async fn transfer_test() {
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount_mint: U256 = 1000.into();
     let amount_transfer: U256 = 100.into();
+
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
 
     mint(token_signer_alice, alice_address, amount_mint).await.unwrap();
 
@@ -130,6 +134,9 @@ async fn transfer_from_test() {
     let token_signer_bob = &fixtures.token_signer_bob;
     let amount_mint: U256 = 1000.into();
     let amount_transfer: U256 = 100.into();
+
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
 
     // give bob some tokens
     mint(token_signer_bob, bob_address, amount_mint).await.unwrap();
@@ -168,6 +175,9 @@ async fn approve_test() {
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 100.into();
 
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
+
     approve(token_signer_alice, bob_address, 0.into())
         .await
         .unwrap();
@@ -196,6 +206,9 @@ async fn approve_account_address_0_error_test() {
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 100.into();
 
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
+
     let tx = approve(token_signer_alice, Address::zero(), amount).await;
     match tx {
         Ok(_) => panic!("approve tx should fail"),
@@ -216,6 +229,9 @@ async fn transfer_balance_too_small_error_test() {
     let bob_address = fixtures.bob_wallet.address();
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 1000.into();
+
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
 
     let alice_balance = token_signer_alice
         .balance_of(alice_address)
@@ -247,6 +263,9 @@ async fn transfer_receiver_address_0_error_test() {
     let alice_address = fixtures.alice_wallet.address();
     let token_signer_alice = &fixtures.token_signer_alice;
 
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
+
     mint(token_signer_alice, alice_address, 1000.into())
         .await
         .unwrap();
@@ -273,6 +292,9 @@ async fn transfer_from_amount_bigger_than_allowance_error_test() {
     let token_signer_bob = &fixtures.token_signer_bob;
     let amount_allowance: U256 = 100.into();
     let amount_transfer: U256 = amount_allowance * 2;
+
+    // try to init (we need to set cap), if already initialized ignore error
+    let _ = init(token_signer_alice, U256::MAX).await;
 
     // give bob some tokens
     mint(token_signer_bob, bob_address, 1000.into()).await.unwrap();
@@ -306,6 +328,18 @@ async fn transfer_from_amount_bigger_than_allowance_error_test() {
 async fn balance_of(my_token_signer: &MyTokenType, account: Address) -> eyre::Result<U256> {
     let balance: U256 = my_token_signer.balance_of(account).call().await?;
     Ok(balance)
+}
+
+async fn init(
+    my_token_signer: &MyTokenType,
+    amount: U256,
+) -> eyre::Result<TransactionReceipt> {
+    my_token_signer
+        .init(amount)
+        .send()
+        .await?
+        .await?
+        .ok_or(Report::msg("init tx error"))
 }
 
 async fn mint(

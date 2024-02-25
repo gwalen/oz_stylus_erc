@@ -84,9 +84,6 @@ impl MyToken {
         Ok(())
     }
 
-    //TODO:
-    // - add init() call to all tests !
-
     pub fn is_paused(&self) -> Result<bool, Erc20Error> {
         Ok(self.erc20_pausable.paused.get())
     }
