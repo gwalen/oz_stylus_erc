@@ -1,16 +1,12 @@
-use dotenv::dotenv;
 use ethers::{
     middleware::SignerMiddleware,
     prelude::abigen,
-    providers::{Http, Middleware, Provider},
+    providers::{Http, Provider},
     signers::{LocalWallet, Signer},
     types::{Address, TransactionReceipt, U256},
 };
-use eyre::{eyre, Report};
-use oz_stylus_erc::tokens::erc20::Erc20Params;
+use eyre::Report;
 use util::fixture_init::SharedFixtures;
-use std::str::FromStr;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::OnceCell;
 
@@ -25,7 +21,9 @@ abigen!(
         function approve(address spender, uint256 amount) external returns (bool)
         function mint(address account, uint256 amount) external
         function burn(uint256 amount) external
+        function burnFrom(address account, uint256 amount) external
         function transfer(address recipient, uint256 amount) external returns (bool)
+        function transferFrom(address sender, address recipient, uint256 amount) external returns (bool)
         function paused() external view returns (bool)
         function isPaused() external view returns (bool)
         function pause() external
@@ -62,22 +60,15 @@ async fn mint_revert_when_paused_works_when_unpaused_test() {
     let token_signer_alice = &fixtures.token_signer_alice;
     let amount: U256 = 1000.into();
 
-    unpause(token_signer_alice).await.unwrap();
-    let is_paused: bool = token_signer_alice.is_paused().call().await.unwrap();
-    println!("is_paused: {}", is_paused);
-
     mint(token_signer_alice, alice_address, amount)
         .await
         .unwrap();
 
     pause(token_signer_alice).await.unwrap();
 
-    let is_paused: bool = token_signer_alice.is_paused().call().await.unwrap();
-    println!("is_paused: {}", is_paused);
-
     let tx = mint(token_signer_alice, alice_address, amount).await;
     match tx {
-        Ok(_) => panic!("pause tx should fail"),
+        Ok(_) => panic!("mint tx should fail"),
         Err(report) => {
             assert!(report
                 .to_string()
@@ -88,16 +79,127 @@ async fn mint_revert_when_paused_works_when_unpaused_test() {
     unpause(token_signer_alice).await.unwrap();
 }
 
+#[tokio::test]
+async fn burn_revert_when_paused_works_when_unpaused_test() {
+    let fixtures_mutex = init_fixtures().await.unwrap();
+    let fixtures = fixtures_mutex.lock().await;
 
+    let alice_address = fixtures.alice_wallet.address();
+    let token_signer_alice = &fixtures.token_signer_alice;
+    let amount: U256 = 1000.into();
 
+    mint(token_signer_alice, alice_address, amount)
+        .await
+        .unwrap();
+    // burn should work here
+    burn(token_signer_alice, amount / 4).await.unwrap();
 
+    pause(token_signer_alice).await.unwrap();
+
+    let tx = burn(token_signer_alice, amount / 4).await;
+    match tx {
+        Ok(_) => panic!("burn tx should fail"),
+        Err(report) => {
+            assert!(report
+                .to_string()
+                .contains(erc20_pausable_error_selector::ENFORCE_PAUSE));
+        }
+    }   
+    // make sure we leave the contract unpaused
+    unpause(token_signer_alice).await.unwrap();
+}
+
+#[tokio::test]
+async fn transfer_revert_when_paused_works_when_unpaused_test() {
+    let fixtures_mutex = init_fixtures().await.unwrap();
+    let fixtures = fixtures_mutex.lock().await;
+
+    let alice_address = fixtures.alice_wallet.address();
+    let bob_address = fixtures.bob_wallet.address();
+    let token_signer_alice = &fixtures.token_signer_alice;
+    let amount: U256 = 1000.into();
+
+    mint(token_signer_alice, alice_address, amount)
+        .await
+        .unwrap();
+    // transfer should work here
+    transfer(token_signer_alice, bob_address, amount / 4).await.unwrap();
+
+    pause(token_signer_alice).await.unwrap();
+
+    let tx = transfer(token_signer_alice, bob_address, amount / 4).await;
+    match tx {
+        Ok(_) => panic!("transfer tx should fail"),
+        Err(report) => {
+            assert!(report
+                .to_string()
+                .contains(erc20_pausable_error_selector::ENFORCE_PAUSE));
+        }
+    }   
+    // make sure we leave the contract unpaused
+    unpause(token_signer_alice).await.unwrap();
+}
+
+#[tokio::test]
+async fn transfer_from_revert_when_paused_works_when_unpaused_test() {
+    let fixtures_mutex = init_fixtures().await.unwrap();
+    let fixtures = fixtures_mutex.lock().await;
+
+    let alice_address = fixtures.alice_wallet.address();
+    let bob_address = fixtures.bob_wallet.address();
+    let token_signer_alice = &fixtures.token_signer_alice;
+    let amount: U256 = 1000.into();
+
+    mint(token_signer_alice, alice_address, amount).await.unwrap();
+    approve(token_signer_alice, alice_address, amount).await.unwrap();
+    // transfer should work here
+    transfer_from(token_signer_alice, alice_address, bob_address, amount / 4).await.unwrap();
+
+    pause(token_signer_alice).await.unwrap();
+
+    let tx = transfer_from(token_signer_alice, alice_address, bob_address, amount / 4).await;
+    match tx {
+        Ok(_) => panic!("transfer_from tx should fail"),
+        Err(report) => {
+            assert!(report
+                .to_string()
+                .contains(erc20_pausable_error_selector::ENFORCE_PAUSE));
+        }
+    }   
+    // make sure we leave the contract unpaused
+    unpause(token_signer_alice).await.unwrap();
+}
+
+#[tokio::test]
+async fn burn_from_revert_when_paused_works_when_unpaused_test() {
+    let fixtures_mutex = init_fixtures().await.unwrap();
+    let fixtures = fixtures_mutex.lock().await;
+
+    let alice_address = fixtures.alice_wallet.address();
+    let token_signer_alice = &fixtures.token_signer_alice;
+    let amount: U256 = 1000.into();
+
+    mint(token_signer_alice, alice_address, amount).await.unwrap();
+    approve(token_signer_alice, alice_address, amount).await.unwrap();
+    // burn_from should work here
+    burn_from(token_signer_alice, alice_address, amount / 4).await.unwrap();
+
+    pause(token_signer_alice).await.unwrap();
+
+    let tx = burn_from(token_signer_alice, alice_address, amount / 4).await;
+    match tx {
+        Ok(_) => panic!("burn_from tx should fail"),
+        Err(report) => {
+            assert!(report
+                .to_string()
+                .contains(erc20_pausable_error_selector::ENFORCE_PAUSE));
+        }
+    }   
+    // make sure we leave the contract unpaused
+    unpause(token_signer_alice).await.unwrap();
+}
 
 /*** Erc20 helper functions ***/
-
-async fn balance_of(my_token_signer: &MyTokenType, account: Address) -> eyre::Result<U256> {
-    let balance: U256 = my_token_signer.balance_of(account).call().await?;
-    Ok(balance)
-}
 
 async fn mint(
     my_token_signer: &MyTokenType,
@@ -157,6 +259,46 @@ async fn unpause(
         .await?
         .await?
         .ok_or(Report::msg("unpause tx error"))
+}
+
+async fn transfer(
+    my_token_signer: &MyTokenType,
+    to: Address,
+    amount: U256,
+) -> eyre::Result<TransactionReceipt> {
+    my_token_signer
+        .transfer(to, amount)
+        .send()
+        .await?
+        .await?
+        .ok_or(Report::msg("transfer tx error"))
+}
+
+async fn transfer_from(
+    my_token_signer: &MyTokenType,
+    from: Address,
+    to: Address,
+    amount: U256,
+) -> eyre::Result<TransactionReceipt> {
+    my_token_signer
+        .transfer_from(from, to, amount)
+        .send()
+        .await?
+        .await?
+        .ok_or(Report::msg("transfer from tx error"))
+}
+
+async fn burn_from(
+    my_token_signer: &MyTokenType,
+    account: Address,
+    amount: U256,
+) -> eyre::Result<TransactionReceipt> {
+    my_token_signer
+        .burn_from(account, amount)
+        .send()
+        .await?
+        .await?
+        .ok_or(Report::msg("burn tx error"))
 }
 
 /*** Fixtures helper functions  ***/

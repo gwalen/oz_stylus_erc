@@ -40,7 +40,7 @@ sol! {
 }
 
 pub enum MyTokenError {
-    AlreadyInitialized(AlreadyInitialized),
+    AlreadyInitialized(AlreadyInitialized),  //0x0dc149f0
 }
 
 impl From<MyTokenError> for Vec<u8> {
@@ -99,6 +99,7 @@ impl MyToken {
     }
 
     pub fn transfer(&mut self, to: Address, value: U256) -> Result<bool, Vec<u8>> {
+        self.erc20_pausable.when_not_paused()?;
         let owner = msg::sender();
         self.transfer_internal(owner, to, value)?;
         Ok(true)
@@ -110,6 +111,7 @@ impl MyToken {
         to: Address,
         value: U256,
     ) -> Result<bool, Vec<u8>> {
+        self.erc20_pausable.when_not_paused()?;
         let spender = msg::sender();
         self.erc20.spend_allowance(from, spender, value)?;
         self.transfer_internal(from, to, value)?;
@@ -140,12 +142,16 @@ impl MyToken {
 
     /*** Erc20Burnable methods ***/
 
-    pub fn burn(&mut self, amount: U256) -> Result<(), Erc20Error> {
-        self.erc20.burn(msg::sender(), amount)
+    pub fn burn(&mut self, amount: U256) -> Result<(), Vec<u8>> {
+        self.erc20_pausable.when_not_paused()?;
+        self.erc20.burn(msg::sender(), amount)?;
+        Ok(())
     }
 
-    pub fn burn_from(&mut self, account: Address, amount: U256) -> Result<(), Erc20Error> {
+    pub fn burn_from(&mut self, account: Address, amount: U256) -> Result<(), Vec<u8>> {
+        self.erc20_pausable.when_not_paused()?;
         self.erc20.spend_allowance(account, msg::sender(), amount)?;
-        self.erc20.burn(account, amount)
+        self.erc20.burn(account, amount)?;
+        Ok(())
     }
 }
