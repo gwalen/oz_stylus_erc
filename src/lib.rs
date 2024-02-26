@@ -7,3 +7,4 @@ extern crate alloc;
 static ALLOC: mini_alloc::MiniAlloc = mini_alloc::MiniAlloc::INIT;
 
 pub mod tokens;
+pub mod extensions;
